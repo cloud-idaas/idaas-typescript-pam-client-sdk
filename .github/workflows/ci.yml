@@ -19,22 +19,12 @@ concurrency:
 jobs:
   repository:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
-      - name: Checkout idaas-typescript-pam-client-sdk
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-          path: idaas-sdk-workspace/idaas-typescript-pam-client-sdk
           ref: ${{ github.sha }}
-      - name: Checkout idaas-typescript-core-sdk
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-          path: idaas-sdk-workspace/idaas-typescript-core-sdk
-          repository: cloud-idaas/idaas-typescript-core-sdk
-          ref: master
-          token: ${{ secrets.SDK_READ_TOKEN || github.token }}
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24.3.0
@@ -42,23 +32,5 @@ jobs:
           package-manager-cache: false
       - name: Pin npm
         run: npm install --global npm@11.21.1
-      - name: Validate current repository
-        env:
-          WORKSPACE: ${{ github.workspace }}/idaas-sdk-workspace
-          VALIDATION_OUT: ${{ runner.temp }}/idaas-validation
-        run: >-
-          node "$WORKSPACE/idaas-typescript-pam-client-sdk/scripts/validate-workspace.cjs"
-          --workspace "$WORKSPACE" --out "$VALIDATION_OUT"
-          --target idaas-typescript-pam-client-sdk
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
-        with:
-          name: idaas-typescript-pam-client-sdk-repository
-          path: |
-            ${{ runner.temp }}/idaas-validation/latest.json
-            ${{ runner.temp }}/idaas-validation/run-*/manifest.json
-            ${{ runner.temp }}/idaas-validation/run-*/logs/
-            ${{ runner.temp }}/idaas-validation/run-*/public/*.tgz
-            ${{ runner.temp }}/idaas-validation/run-*/internal/*.tgz
-          if-no-files-found: warn
-          retention-days: 7
+      - name: Validate against published upstream packages
+        run: node scripts/validate-ci.cjs
