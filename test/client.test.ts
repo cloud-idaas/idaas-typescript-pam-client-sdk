@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert';
 import {
   ClientException,
+  DefaultHttpClient,
   type HttpClient,
   type HttpRequest,
   ServerException,
@@ -157,6 +158,72 @@ describe('PAM Developer API contract', () => {
     pam.close();
     await assert.rejects(pam.getApiKey('id'));
   });
+  it('supplies the assembled User-Agent to a replacement send method', async () => {
+    class ReplacementTransport extends DefaultHttpClient {
+      override async send(request: HttpRequest) {
+        const marker = 'idaas-typescript-pam-client-sdk/';
+        assert(request.headers?.['user-agent']?.includes(marker));
+        assert.equal(request.userAgent, undefined);
+        return {
+          statusCode: 200,
+          headers: {},
+          body: '{"cloudAccountRoleAccessCredential":{"alibabaCloudStsToken":{"securityToken":"session"}}}',
+        };
+      }
+    }
+    const httpClient = new ReplacementTransport();
+    const pam = new IDaaSPamClient({
+      developerApiEndpoint: 'https://pam.example',
+      idaasInstanceId: 'i',
+      credentialProvider: provider,
+      httpClient,
+    });
+    try {
+      assert.equal(
+        (await pam.obtainAccessCredential('id')).alibabaCloudStsToken?.securityToken,
+        'session',
+      );
+    } finally {
+      pam.close();
+      httpClient.close();
+    }
+  });
+
+  it('preserves known PAM STS codes and drops unknown values and descriptions', async () => {
+    for (const [statusCode, upstream, errorCode] of [
+      [404, 'cloud_account_role_not_found', 'cloud_account_role_not_found'],
+      [403, 'authorization_rule_disallowed', 'authorization_rule_disallowed'],
+      [401, 'invalid_access_token', 'invalid_access_token'],
+      [403, 'unknown-value-a1c9', 'HTTP_403'],
+    ] as const) {
+      const pam = new IDaaSPamClient({
+        developerApiEndpoint: 'https://pam.example',
+        idaasInstanceId: 'i',
+        credentialProvider: provider,
+        httpClient: {
+          async send() {
+            return {
+              statusCode,
+              headers: {},
+              body: JSON.stringify({ error: upstream, error_description: 'sample-value-31bd' }),
+            };
+          },
+        },
+      });
+      try {
+        await assert.rejects(pam.obtainAccessCredential('role'), (error: unknown) => {
+          assert(error instanceof ClientException);
+          assert.equal(error.statusCode, statusCode);
+          assert.equal(error.errorCode, errorCode);
+          assert(!error.message.includes('sample-value-31bd'));
+          return true;
+        });
+      } finally {
+        pam.close();
+      }
+    }
+  });
+
   it('distinguishes client and server errors without exposing raw credentials', async () => {
     for (const status of [403, 503]) {
       const pam = new IDaaSPamClient({

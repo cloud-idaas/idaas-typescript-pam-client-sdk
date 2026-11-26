@@ -55,6 +55,8 @@ Use an authorized Core provider for PAM access. The default provider requests `u
 
 Call `close()` after all requests finish. Injected shared providers and HTTP clients remain caller-owned. Never print or persist returned credentials in example configuration.
 
+PAM requests include the PAM repository name and version in the default User-Agent. STS requests initiated by an Akless adapter also include that adapter’s repository name and version.
+
 ## Examples and support
 
 See [examples](examples) for CommonJS, ESM, and TypeScript samples. Report issues through [GitHub Issues](https://github.com/cloud-idaas/idaas-typescript-pam-client-sdk/issues). Development instructions are in the repository's [contribution guide](https://github.com/cloud-idaas/idaas-typescript-pam-client-sdk/blob/master/CONTRIBUTING.md).

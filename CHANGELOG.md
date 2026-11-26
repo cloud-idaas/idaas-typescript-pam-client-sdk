@@ -1,6 +1,11 @@
 # Changelog
 
-## 0.1.0-beta.2 (Unreleased)
+## 0.1.0-beta.3
+
+- Include the PAM repository name and build version in User-Agent headers for PAM requests.
+- Use Core SDK 0.1.0-beta.3.
+
+## 0.1.0-beta.2
 
 - Publish a maintenance prerelease with no API changes.
 

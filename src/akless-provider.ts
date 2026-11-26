@@ -173,11 +173,13 @@ export class CachedCloudCredentialProvider<T extends ExpiringCredential> {
    * Creates a provider without requesting STS credentials.
    * @param options - Required role and injected sources, endpoints, and cache configuration.
    * @param parse - Validates and maps the wire response to a domain value with a valid ISO expiration timestamp.
+   * @param adapterComponent - SDK repository/version associated with this role request.
    * @throws ConfigException - The configuration is invalid or the required default factory is not initialized.
    */
   constructor(
     private readonly options: AklessProviderOptions,
     parse: (value: CloudAccountRoleAccessCredential) => T,
+    adapterComponent?: string,
   ) {
     this.options = { ...options };
     required(options.roleExternalId, 'roleExternalId');
@@ -185,7 +187,10 @@ export class CachedCloudCredentialProvider<T extends ExpiringCredential> {
     this.pam = options.pamClient || new IDaaSPamClient(options);
     this.now = options.cache?.clock || Date.now;
     this.cache = new CachedResultSupplier(async () => {
-      const value = parse(await this.pam.obtainAccessCredential(roleExternalId));
+      const result = adapterComponent
+        ? await this.pam.obtainAccessCredential(roleExternalId, adapterComponent)
+        : await this.pam.obtainAccessCredential(roleExternalId);
+      const value = parse(result);
       return { value, expiresAt: Date.parse(value.expiration) };
     }, options.cache);
   }

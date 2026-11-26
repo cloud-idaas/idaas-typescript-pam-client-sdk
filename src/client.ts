@@ -1,4 +1,5 @@
 import {
+  buildConfiguredUserAgent,
   ConfigException,
   CredentialException,
   DefaultHttpClient,
@@ -15,6 +16,9 @@ import {
   record,
   required,
 } from '@cloud-idaas/core-sdk';
+import { SDK_VERSION } from './sdk-version';
+
+const pamComponent = `idaas-typescript-pam-client-sdk/${SDK_VERSION}`;
 
 export interface PamClientOptions {
   developerApiEndpoint?: string;
@@ -201,6 +205,7 @@ export class IDaaSPamClient {
   private readonly instanceId: string;
   private readonly provider: IDaaSCredentialProvider;
   private readonly http: HttpClient;
+  private readonly httpConfiguration?: HttpConfiguration;
   private closed = false;
   /**
    * @param options - Injected endpoints, instance, and provider take precedence; only missing options use the default Core factory.
@@ -236,9 +241,9 @@ export class IDaaSPamClient {
         'credentialProvider is missing getAccessToken',
         'InvalidCredentialProvider',
       );
-    this.http =
-      options.httpClient ||
-      new DefaultHttpClient(options.httpConfiguration || defaults?.httpConfiguration);
+    const httpConfiguration = options.httpConfiguration || defaults?.httpConfiguration;
+    this.httpConfiguration = httpConfiguration && { ...httpConfiguration };
+    this.http = options.httpClient || new DefaultHttpClient(this.httpConfiguration);
   }
   private async request(
     path: string,
@@ -246,13 +251,23 @@ export class IDaaSPamClient {
     body?: Record<string, unknown>,
     query?: Record<string, unknown>,
     authenticated = true,
+    adapterComponent?: string,
   ): Promise<Record<string, unknown>> {
     if (this.closed) throw new ConfigException('PAM client is closed', 'Closed');
     try {
       const url = new URL(`${this.endpoint}/v2/${encodeURIComponent(this.instanceId)}${path}`);
       for (const [key, value] of Object.entries(query || {}))
         if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
+      const additionalComponents = adapterComponent
+        ? [pamComponent, adapterComponent]
+        : [pamComponent];
+      const coreTransport = this.http.send === DefaultHttpClient.prototype.send;
       const headers: Record<string, string> = {};
+      if (!coreTransport) {
+        headers['user-agent'] = buildConfiguredUserAgent(this.httpConfiguration, {
+          additionalComponents,
+        });
+      }
       if (authenticated) {
         const token = await this.provider.getAccessToken();
         required(token, 'accessToken');
@@ -264,6 +279,7 @@ export class IDaaSPamClient {
         url: url.href,
         method,
         headers,
+        ...(coreTransport ? { userAgent: { additionalComponents } } : {}),
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
       if (!response.body && response.statusCode >= 200 && response.statusCode < 300) return {};
@@ -517,16 +533,22 @@ export class IDaaSPamClient {
   }
   /**
    * @param roleExternalId - Cloud account role external ID.
+   * @param adapterComponent - Optional SDK repository/version for the calling Akless adapter.
    * @returns An independent validated wire response; parent expiration uses Unix seconds and cloud expiration uses an ISO string.
    * @throws IDaaSException - Input, authentication, requests, or responses are invalid; this method creates no STS cache.
    */
-  async obtainAccessCredential(roleExternalId: string): Promise<CloudAccountRoleAccessCredential> {
+  async obtainAccessCredential(
+    roleExternalId: string,
+    adapterComponent?: string,
+  ): Promise<CloudAccountRoleAccessCredential> {
     required(roleExternalId, 'roleExternalId');
     const body = await this.request(
       '/cloudAccountRoles/_/actions/obtainAccessCredential',
       'GET',
       undefined,
       { cloudAccountRoleExternalId: roleExternalId },
+      true,
+      adapterComponent,
     );
     return cloudAccessCredential(body.cloudAccountRoleAccessCredential);
   }
