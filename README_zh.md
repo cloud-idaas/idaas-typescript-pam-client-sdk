@@ -55,6 +55,8 @@ try {
 
 所有请求完成后调用 `close()`；注入的共享提供者和 HTTP 客户端由调用方管理。不要打印返回的凭证或将其写入示例配置。
 
+PAM 请求的默认 User-Agent 包含 PAM 仓库名和版本。通过 Akless 适配器发起的 STS 请求还包含相应适配器的仓库名和版本。
+
 ## 示例与支持
 
 [examples](examples) 提供 CommonJS、ESM 和 TypeScript 示例。问题反馈请使用 [GitHub Issues](https://github.com/cloud-idaas/idaas-typescript-pam-client-sdk/issues)，开发说明见源码仓库的[贡献指南](https://github.com/cloud-idaas/idaas-typescript-pam-client-sdk/blob/master/CONTRIBUTING.md)。
